@@ -1,0 +1,74 @@
+groups:
+- name: trading_alerts
+  rules:
+  - alert: TradingEngineDown
+    expr: up{job="trading-engine"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Trading engine is down"
+      description: "The trading engine has been down for more than 1 minute."
+
+  - alert: DashboardDown
+    expr: up{job="trading-dashboard"} == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Trading dashboard is down"
+      description: "The trading dashboard has been down for more than 2 minutes."
+
+  - alert: HighErrorRate
+    expr: rate(trading_errors_total[5m]) > 0.1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High error rate detected"
+      description: "Error rate is {{ $value }} errors per second."
+
+  - alert: LargeDrawdown
+    expr: portfolio_drawdown_percent > 10
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Large portfolio drawdown detected"
+      description: "Portfolio drawdown is {{ $value }}%."
+
+  - alert: HighMemoryUsage
+    expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage"
+      description: "Container memory usage is above 80%."
+
+  - alert: HighCPUUsage
+    expr: rate(container_cpu_usage_seconds_total[5m]) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage"
+      description: "Container CPU usage is above 80%."
+
+  - alert: DatabaseDown
+    expr: up{job="postgres"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "PostgreSQL database is down"
+      description: "The PostgreSQL database has been down for more than 1 minute."
+
+  - alert: RedisDown
+    expr: up{job="redis"} == 0
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Redis cache is down"
+      description: "The Redis cache has been down for more than 1 minute."

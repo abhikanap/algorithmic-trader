@@ -1,0 +1,120 @@
+# Docker Performance Optimization Configuration
+# Enable BuildKit for parallel builds and advanced caching
+
+version: '3.8'
+
+# Global configuration for performance
+x-common-variables: &common-variables
+  ENVIRONMENT: demo
+  DEBUG: "true"
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 3
+  start_period: 10s
+
+x-logging-config: &logging-config
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # Redis first - fastest startup, needed by other services
+  redis:
+    image: redis:7-alpine
+    container_name: trading-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    logging: *logging-config
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 5s
+    # Performance optimizations
+    sysctls:
+      - net.core.somaxconn=65535
+    ulimits:
+      memlock: -1
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+
+  # Core Service - Optimized with multi-stage build and caching
+  core-service:
+    build:
+      context: ./core-service
+      dockerfile: Dockerfile.optimized
+      cache_from:
+        - trading-core-service:cache
+      target: production
+    image: trading-core-service:latest
+    container_name: trading-core-service
+    ports:
+      - "8001:8001"
+    environment:
+      <<: *common-variables
+    restart: unless-stopped
+    logging: *logging-config
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
+    # Performance optimizations
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Market Data Service - Parallel build with optimizations
+  market-service:
+    build:
+      context: ./market-service
+      dockerfile: Dockerfile.optimized
+      cache_from:
+        - trading-market-service:cache
+      target: production
+    image: trading-market-service:latest
+    container_name: trading-market-service
+    ports:
+      - "8002:8002"
+    environment:
+      <<: *common-variables
+      CORE_SERVICE_URL: http://core-service:8001
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      core-service:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging-config
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
+    # Performance optimizations
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+networks:
+  default:
+    name: trading-network
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500
+
+volumes:
+  redis-data:
+    driver: local

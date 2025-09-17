@@ -1,0 +1,202 @@
+# Strategy Configuration
+strategy:
+  name: "Multi-Bucket Intraday Strategy"
+  version: "1.0.0"
+  
+  # Capital Buckets (percentages must sum to 100)
+  buckets:
+    A:
+      name: "Penny Stocks & Microcap Movers"
+      weight: 0.20
+      description: "Low float, thin books, promotion pumps"
+      constraints:
+        min_price: 0.50
+        max_price: 10.0
+        min_market_cap: 10_000_000
+        max_market_cap: 500_000_000
+        min_float: 1_000_000
+        max_float: 50_000_000
+      
+    B:
+      name: "Large-cap Intraday Trends"
+      weight: 0.30
+      description: "Deep liquidity, institutional VWAP execution"
+      constraints:
+        min_price: 20.0
+        min_market_cap: 10_000_000_000
+        min_avg_volume: 1_000_000
+        exchanges: ["NYSE", "NASDAQ"]
+      
+    C:
+      name: "Multi-day Swing Trades"
+      weight: 0.20
+      description: "Sustained trends over multiple days"
+      constraints:
+        min_price: 5.0
+        min_market_cap: 1_000_000_000
+        holding_period: "2-5 days"
+      
+    D:
+      name: "Catalyst-driven Market Movers"
+      weight: 0.20
+      description: "Earnings, M&A, FDA, guidance events"
+      constraints:
+        min_atr_percent: 5.0
+        catalyst_types: ["earnings", "news", "fda", "merger"]
+      
+    E:
+      name: "Defensive Hedges"
+      weight: 0.10
+      description: "ETFs, dividend plays, low volatility"
+      constraints:
+        max_atr_percent: 2.0
+        asset_types: ["ETF", "dividend_stock"]
+        min_yield: 0.02
+
+  # Time Segments
+  time_segments:
+    premarket:
+      start: "07:00"
+      end: "09:30"
+      allocation: 0.10
+      strategies: ["news_catalyst", "gap_trades"]
+    
+    open:
+      start: "09:30"
+      end: "10:30"
+      allocation: 0.25
+      strategies: ["momentum_breakout", "gap_and_go", "opening_range"]
+    
+    late_morning:
+      start: "10:30"
+      end: "11:30"
+      allocation: 0.15
+      strategies: ["trend_continuation", "reversal_setup"]
+    
+    midday:
+      start: "11:30"
+      end: "13:30"
+      allocation: 0.10
+      strategies: ["mean_reversion", "range_bound"]
+    
+    afternoon:
+      start: "13:30"
+      end: "15:00"
+      allocation: 0.15
+      strategies: ["reversal_opportunity", "trend_continuation"]
+    
+    power_hour:
+      start: "15:00"
+      end: "16:00"
+      allocation: 0.10
+      strategies: ["volatility_surge", "closing_imbalance"]
+    
+    overnight:
+      start: "15:45"
+      end: "09:30+1"  # Next day
+      allocation: 0.25
+      strategies: ["overnight_gap", "earnings_hold", "news_catalyst"]
+
+# Pattern Definitions
+patterns:
+  intraday:
+    morning_spike_fade:
+      name: "Morning Spike → Fade (Pump & Fade)"
+      confidence_threshold: 0.7
+      bucket_preference: ["A", "D"]
+      time_preference: ["open", "late_morning"]
+      
+    morning_surge_uptrend:
+      name: "Morning Surge → All-Day Uptrend"
+      confidence_threshold: 0.8
+      bucket_preference: ["B", "C"]
+      time_preference: ["open", "afternoon"]
+      
+    morning_plunge_recovery:
+      name: "Morning Plunge → Midday Recovery"
+      confidence_threshold: 0.6
+      bucket_preference: ["B", "C"]
+      time_preference: ["midday", "afternoon"]
+      
+    morning_selloff_downtrend:
+      name: "Morning Sell-Off → All-Day Downtrend"
+      confidence_threshold: 0.7
+      bucket_preference: ["B", "D"]
+      time_preference: ["open", "afternoon"]
+      
+    choppy_range_bound:
+      name: "Choppy/Range-Bound Day"
+      confidence_threshold: 0.5
+      bucket_preference: ["E"]
+      time_preference: ["midday"]
+
+  multiday:
+    sustained_uptrend:
+      name: "Sustained Uptrend (Multi-Day Rally)"
+      confidence_threshold: 0.8
+      bucket_preference: ["C"]
+      holding_period: "3-7 days"
+      
+    sustained_downtrend:
+      name: "Sustained Downtrend (Multi-Day Selloff)"
+      confidence_threshold: 0.8
+      bucket_preference: ["C"]
+      holding_period: "3-7 days"
+      
+    blowoff_top:
+      name: "Blow-Off Top / First Red Day"
+      confidence_threshold: 0.7
+      bucket_preference: ["A", "D"]
+      
+    downtrend_reversal:
+      name: "Downtrend → Reversal Up"
+      confidence_threshold: 0.6
+      bucket_preference: ["C"]
+      
+    sideways_consolidation:
+      name: "Sideways Consolidation/Base"
+      confidence_threshold: 0.5
+      bucket_preference: ["C", "E"]
+
+# Risk Management
+risk_management:
+  position_sizing:
+    max_position_percent: 2.0
+    max_bucket_utilization: 0.9
+    min_position_size: 100  # USD
+    
+  stop_loss:
+    default_atr_multiplier: 1.5
+    bucket_specific:
+      A: 2.0  # Higher volatility
+      B: 1.2  # Lower volatility
+      C: 1.8  # Swing trades
+      D: 2.5  # High vol catalysts
+      E: 1.0  # Conservative
+      
+  take_profit:
+    default_atr_multiplier: 3.0
+    bucket_specific:
+      A: 4.0
+      B: 2.5
+      C: 3.5
+      D: 5.0
+      E: 2.0
+      
+  daily_limits:
+    max_loss_percent: 3.0
+    max_trades_per_day: 20
+    max_trades_per_bucket: 5
+
+# Technical Indicators
+indicators:
+  atr_period: 14
+  rsi_period: 14
+  sma_periods: [20, 50, 200]
+  ema_periods: [9, 21]
+  bollinger_period: 20
+  bollinger_std: 2.0
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  volume_sma_period: 20

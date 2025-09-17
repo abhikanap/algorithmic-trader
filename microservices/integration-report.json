@@ -1,0 +1,28 @@
+{
+    "test_run": {
+        "timestamp": "2025-09-12T21:10:53Z",
+        "duration": "Fri Sep 12 17:10:53 EDT 2025",
+        "tester": "integration-test.sh"
+    },
+    "services_tested": [
+        {
+            "name": "core-service",
+            "port": 8001,
+            "status": "healthy",
+            "endpoints_tested": ["/health", "/models/enums", "/utils/validate-signal"]
+        },
+        {
+            "name": "market-service", 
+            "port": 8002,
+            "status": "healthy",
+            "endpoints_tested": ["/health", "/quote/AAPL", "/quotes", "/historical/AAPL"]
+        }
+    ],
+    "test_categories": {
+        "data_validation": "tested",
+        "market_data_flow": "tested", 
+        "service_communication": "tested",
+        "performance_caching": "tested"
+    },
+    "overall_status": "passed"
+}

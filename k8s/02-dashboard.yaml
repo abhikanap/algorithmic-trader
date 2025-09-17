@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-dashboard
+  namespace: algorithmic-trading
+  labels:
+    app: trading-dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: trading-dashboard
+  template:
+    metadata:
+      labels:
+        app: trading-dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: algorithmic-trader-ui:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8501
+          name: http
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: STREAMLIT_SERVER_ADDRESS
+          value: "0.0.0.0"
+        - name: STREAMLIT_SERVER_PORT
+          value: "8501"
+        volumeMounts:
+        - name: artifacts-volume
+          mountPath: /app/artifacts
+          readOnly: true
+        - name: logs-volume
+          mountPath: /app/logs
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: artifacts-volume
+        persistentVolumeClaim:
+          claimName: trading-artifacts-pvc
+      - name: logs-volume
+        persistentVolumeClaim:
+          claimName: trading-logs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-dashboard-service
+  namespace: algorithmic-trading
+  labels:
+    app: trading-dashboard
+spec:
+  selector:
+    app: trading-dashboard
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8501
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trading-dashboard-ingress
+  namespace: algorithmic-trading
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  tls:
+  - hosts:
+    - trading.yourdomain.com
+    secretName: trading-dashboard-tls
+  rules:
+  - host: trading.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: trading-dashboard-service
+            port:
+              number: 80

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  trading-platform-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading-platform-demo
+    ports:
+      - "8080:8080"  # Web Dashboard
+      - "8000:8000"  # API Server
+    environment:
+      - ENVIRONMENT=demo
+      - SECRET_KEY=demo-secret-key-change-in-production
+      - JWT_EXPIRATION=3600
+      - MONITORING_INTERVAL=15
+      - GENERATE_SAMPLE_REPORTS=true
+    volumes:
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      - ./demo/data:/app/demo/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis-demo:
+    image: redis:7-alpine
+    container_name: trading-platform-redis-demo
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
