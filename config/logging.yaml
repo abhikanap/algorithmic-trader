@@ -1,0 +1,79 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(name)s %(levelname)s %(message)s'
+  
+  standard:
+    format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/app.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 3
+  
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: json
+    filename: logs/error.log
+    maxBytes: 10485760
+    backupCount: 3
+
+loggers:
+  apps.screener:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  apps.analyzer:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  apps.strategy:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  apps.execution:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  packages.core:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  ui:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  yfinance:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+  
+  alpaca:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console, file, error_file]

@@ -1,0 +1,22 @@
+{
+  "demo_mode": true,
+  "sample_symbols": ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"],
+  "initial_capital": 100000,
+  "risk_limits": {
+    "max_position_size": 0.1,
+    "daily_loss_limit": 0.05,
+    "max_drawdown": 0.15
+  },
+  "strategies": {
+    "mean_reversion": {
+      "enabled": true,
+      "lookback_period": 20,
+      "threshold": 2.0
+    },
+    "momentum": {
+      "enabled": true,
+      "lookback_period": 10,
+      "threshold": 1.5
+    }
+  }
+}

@@ -1,0 +1,75 @@
+# Multi-stage optimized Dockerfile for Market Service
+# Uses BuildKit features for parallel builds and layer caching
+
+# syntax=docker/dockerfile:1.4
+FROM python:3.11-slim as base
+
+# Install system dependencies with caching
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Performance environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Create app user and directory
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+WORKDIR /app
+
+# Dependencies stage with pip caching
+FROM base as deps
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-deps -r requirements.txt && \
+    pip install fastapi uvicorn[standard] redis requests python-multipart aiohttp
+
+# Development stage
+FROM deps as development
+COPY . .
+RUN chown -R appuser:appuser /app
+USER appuser
+EXPOSE 8002
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+
+# Production stage - size and performance optimized
+FROM deps as production
+# Copy application with proper ownership
+COPY --chown=appuser:appuser . .
+
+# Install production server first
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir gunicorn
+
+# Clean up development tools (keep pip for health checks)
+RUN find /usr/local -name '*.pyc' -delete && \
+    find /usr/local -name '__pycache__' -type d -exec rm -rf {} + || true
+
+# Security optimizations
+USER appuser
+EXPOSE 8002
+
+# Built-in health check
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -sf http://localhost:8002/health || exit 1
+
+# Production command with performance tuning
+CMD ["gunicorn", "app:app", \
+     "--bind", "0.0.0.0:8002", \
+     "--workers", "3", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--worker-connections", "1000", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "100", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--preload", \
+     "--log-level", "info", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]

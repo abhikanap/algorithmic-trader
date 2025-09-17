@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-engine
+  namespace: algorithmic-trading
+  labels:
+    app: trading-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trading-engine
+  template:
+    metadata:
+      labels:
+        app: trading-engine
+    spec:
+      containers:
+      - name: trading-engine
+        image: algorithmic-trader:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: ALPACA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: trading-secrets
+              key: alpaca-api-key
+        - name: ALPACA_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: trading-secrets
+              key: alpaca-secret-key
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: artifacts-volume
+          mountPath: /app/artifacts
+        - name: logs-volume
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      volumes:
+      - name: config-volume
+        configMap:
+          name: trading-config
+      - name: artifacts-volume
+        persistentVolumeClaim:
+          claimName: trading-artifacts-pvc
+      - name: logs-volume
+        persistentVolumeClaim:
+          claimName: trading-logs-pvc
+      restartPolicy: Always
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-pipeline
+  namespace: algorithmic-trading
+spec:
+  schedule: "0 9 * * 1-5"  # 9 AM on weekdays
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: pipeline-runner
+            image: algorithmic-trader:latest
+            imagePullPolicy: IfNotPresent
+            command:
+            - python
+            - main.py
+            - pipeline
+            - --dry-run
+            - --save-artifacts
+            env:
+            - name: PYTHONPATH
+              value: "/app"
+            - name: ALPACA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: trading-secrets
+                  key: alpaca-api-key
+            - name: ALPACA_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: trading-secrets
+                  key: alpaca-secret-key
+            volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+              readOnly: true
+            - name: artifacts-volume
+              mountPath: /app/artifacts
+            - name: logs-volume
+              mountPath: /app/logs
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+          volumes:
+          - name: config-volume
+            configMap:
+              name: trading-config
+          - name: artifacts-volume
+            persistentVolumeClaim:
+              claimName: trading-artifacts-pvc
+          - name: logs-volume
+            persistentVolumeClaim:
+              claimName: trading-logs-pvc
+          restartPolicy: OnFailure

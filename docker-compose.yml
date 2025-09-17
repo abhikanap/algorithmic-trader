@@ -1,0 +1,244 @@
+version: '3.8'
+
+services:
+  # Complete Algorithmic Trading Platform v2.0
+  trading-platform:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: algorithmic-trader-v2
+    ports:
+      - "${TRADING_PORT:-8000}:8000"
+      - "${STREAMLIT_PORT:-8501}:8501"
+      - "${MONITORING_PORT:-8080}:8080"
+    environment:
+      # Core platform settings
+      - PYTHONPATH=/app
+      - TRADING_ENVIRONMENT=docker
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ARTIFACTS_PATH=/app/artifacts
+      - CACHE_PATH=/app/cache
+      
+      # Trading configuration
+      - TRADING_MODE=${TRADING_MODE:-paper}
+      - MAX_POSITIONS=${MAX_POSITIONS:-20}
+      - MAX_POSITION_SIZE_PCT=${MAX_POSITION_SIZE_PCT:-10.0}
+      - DAILY_LOSS_LIMIT_PCT=${DAILY_LOSS_LIMIT_PCT:-5.0}
+      
+      # Alpaca API (for live/paper trading)
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY}
+      - ALPACA_BASE_URL=${ALPACA_BASE_URL:-https://paper-api.alpaca.markets}
+      
+      # Database connections (optional)
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-trading}
+      - POSTGRES_USER=${POSTGRES_USER:-trader}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-trading123}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      
+      # Feature flags
+      - ENABLE_BACKTESTING=${ENABLE_BACKTESTING:-true}
+      - ENABLE_WALK_FORWARD=${ENABLE_WALK_FORWARD:-true}  
+      - ENABLE_LIVE_TRADING=${ENABLE_LIVE_TRADING:-false}
+      - ENABLE_PAPER_TRADING=${ENABLE_PAPER_TRADING:-true}
+      
+    volumes:
+      - ${ARTIFACTS_PATH:-./artifacts}:/app/artifacts
+      - ${LOGS_PATH:-./logs}:/app/logs
+      - ${CONFIG_PATH:-./config}:/app/config
+      - ${CACHE_PATH:-./cache}:/app/cache
+      - ${DATA_PATH:-./data}:/app/data
+    networks:
+      - trading-network
+    restart: unless-stopped
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: ${PLATFORM_MEMORY:-2g}
+          cpus: ${PLATFORM_CPU:-1.0}
+        reservations:
+          memory: 512m
+          cpus: 0.2
+    healthcheck:
+      test: ["CMD", "python", "-c", "from packages.core.config import settings; print('Platform healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command: ["python", "main.py", "status"]
+
+  # Streamlit Dashboard
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: trading-dashboard
+    ports:
+      - "${STREAMLIT_SERVER_PORT:-8501}:8501"
+    environment:
+      - PYTHONPATH=${PYTHONPATH:-/app}
+      - STREAMLIT_SERVER_ADDRESS=${STREAMLIT_SERVER_ADDRESS:-0.0.0.0}
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=${STREAMLIT_BROWSER_GATHER_USAGE_STATS:-false}
+      - STREAMLIT_SERVER_HEADLESS=${STREAMLIT_SERVER_HEADLESS:-true}
+      - STREAMLIT_SERVER_ENABLE_CORS=${STREAMLIT_SERVER_ENABLE_CORS:-false}
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=${STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION:-true}
+      - ENVIRONMENT=${ENVIRONMENT:-docker}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ${ARTIFACTS_PATH:-./artifacts}:/app/artifacts:ro
+      - ${LOGS_PATH:-./logs}:/app/logs:ro
+      - ${CONFIG_PATH:-./config}:/app/config:ro
+    networks:
+      - trading-network
+    restart: unless-stopped
+    depends_on:
+      - trading-engine
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: ${DASHBOARD_MEMORY:-512m}
+          cpus: ${DASHBOARD_CPU:-0.25}
+        reservations:
+          memory: 128m
+          cpus: 0.05
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis for caching and session storage (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: trading-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - trading-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # PostgreSQL for trade history (optional)
+  postgres:
+    image: postgres:15-alpine
+    container_name: trading-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-trading}
+      - POSTGRES_USER=${POSTGRES_USER:-trader}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-trading123}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - trading-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trader} -d ${POSTGRES_DB:-trading}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Trading Pipeline Runner (runs periodically)
+  pipeline-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading-pipeline
+    environment:
+      - PYTHONPATH=${PYTHONPATH:-/app}
+      - ENVIRONMENT=${ENVIRONMENT:-docker}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TRADING_MODE=${TRADING_MODE:-dry_run}
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY}
+      - ALPACA_BASE_URL=${ALPACA_BASE_URL:-https://paper-api.alpaca.markets}
+    volumes:
+      - ${ARTIFACTS_PATH:-./artifacts}:/app/artifacts
+      - ${LOGS_PATH:-./logs}:/app/logs
+      - ${CONFIG_PATH:-./config}:/app/config
+    networks:
+      - trading-network
+    restart: "no"  # Run on demand
+    depends_on:
+      - redis
+      - postgres
+    profiles:
+      - pipeline
+    command: ["python", "main.py", "pipeline", "--dry-run", "--save-artifacts", "--verbose"]
+
+  # Backtest Runner (runs on demand)
+  backtest-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading-backtest
+    environment:
+      - PYTHONPATH=${PYTHONPATH:-/app}
+      - ENVIRONMENT=${ENVIRONMENT:-docker}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ${ARTIFACTS_PATH:-./artifacts}:/app/artifacts
+      - ${LOGS_PATH:-./logs}:/app/logs
+      - ${CONFIG_PATH:-./config}:/app/config
+    networks:
+      - trading-network
+    restart: "no"  # Run on demand
+    profiles:
+      - backtest
+    command: ["python", "main.py", "backtest", "run", "--start-date", "2024-01-01", "--end-date", "2024-03-31"]
+
+  # Monitoring with Prometheus (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: trading-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - trading-network
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  # Grafana Dashboard (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: trading-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - trading-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
