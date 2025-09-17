@@ -297,10 +297,21 @@ python -m analytics.performance
 
 | Document | Description |
 |----------|-------------|
-| [PHASE_7_ADVANCED_FEATURES.md](PHASE_7_ADVANCED_FEATURES.md) | Phase 7 implementation details |
-| [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) | Complete API reference |
-| [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) | Production deployment guide |
-| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions |
+| [PHASE_7_ADVANCED_FEATURES.md](docs/phase-updates/PHASE_7_ADVANCED_FEATURES.md) | Phase 7 implementation details |
+| [API Documentation](http://localhost:8000/docs) | Interactive API reference (when server is running) |
+| [Docker Guide](docs/summary-guides/DOCKER_GUIDE.md) | Docker deployment guide |
+| [Testing & Debugging Guide](docs/summary-guides/TESTING_DEBUGGING_GUIDE.md) | Common issues and solutions |
+
+### Additional Documentation
+
+| Document | Category | Description |
+|----------|----------|-------------|
+| [Project Summary](docs/summary-guides/PROJECT_SUMMARY.md) | Overview | Complete project overview and architecture |
+| [Microservices Architecture](docs/summary-guides/MICROSERVICES_ARCHITECTURE.md) | Architecture | Detailed microservices design |
+| [Demo Summary](docs/summary-guides/DEMO_SUMMARY.md) | Usage | Demo scenarios and examples |
+| [Deployment Complete](docs/phase-updates/DEPLOYMENT_COMPLETE.md) | Deployment | Production deployment status |
+| [Project Status](docs/phase-updates/PROJECT_STATUS.md) | Status | Current project status and roadmap |
+| [Trading Strategies](docs/strategy/) | Strategy | Strategy documentation and patterns |
 
 ## 🚀 Advanced Usage
 
@@ -365,7 +376,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- 📧 Email: [support@trading-platform.com](mailto:support@trading-platform.com)
+- 📧 Email: [abhishek.data.unicorn@gmail.com](mailto:abhishek.data.unicorn@gmail.com)
 - 📚 Documentation: [docs/](docs/)
 - 🐛 Issues: [GitHub Issues](https://github.com/abhikanap/algorithmic-trader/issues)
 - 💬 Discussions: [GitHub Discussions](https://github.com/abhikanap/algorithmic-trader/discussions)
